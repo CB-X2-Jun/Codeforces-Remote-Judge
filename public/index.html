@@ -2,54 +2,58 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Codeforces远端评测</title>
+<title>Codeforces 远程提交</title>
 <style>
-body{font-family: Arial; max-width:800px;margin:30px auto;}
+body{font-family: Arial; max-width:700px;margin:30px auto;padding:0 20px;}
 label,input,select,textarea,button{display:block;margin-bottom:10px;width:100%;}
-textarea{height:300px;font-family: monospace;}
-button{padding:8px;background:#4CAF50;color:white;border:none;cursor:pointer;}
+textarea{height:200px;font-family: monospace;}
+button{padding:8px; background:#4CAF50; color:white; border:none; cursor:pointer;}
 button:hover{background:#45a049;}
-.result{padding:10px;border-radius:5px; margin:5px 0; font-weight:bold;}
+#result{margin-top:20px;padding:10px;border:1px solid #ccc;}
 </style>
 </head>
 <body>
-<h2>Codeforces远端评测</h2>
+<h2>Codeforces 远程提交</h2>
 <label>JSESSIONID: <input id="jsessionid"></label>
 <label>用户名: <input id="username"></label>
-<label>题号: <input id="problem" placeholder="例如 1A"></label>
+<label>题目 (例: 1/A): <input id="problem"></label>
 <label>语言:
 <select id="language">
-<option value="54">GNU G++17 7.3.0</option>
-<option value="43">GNU GCC C11 5.1.0</option>
-<option value="87">Java 21 64bit</option>
-</select>
-</label>
+  <option value="54">G++17</option>
+  <option value="89">G++20</option>
+  <option value="7">Python 2.7</option>
+  <option value="31">Python 3</option>
+</select></label>
 <label>源代码:<br><textarea id="source"></textarea></label>
 <button onclick="submitCode()">提交</button>
 
-<h3>提交结果:</h3>
-<pre id="result"></pre>
+<div id="result"></div>
 
 <script>
 async function submitCode(){
-    const data = {
-        jsessionid: document.getElementById("jsessionid").value,
-        problem: document.getElementById("problem").value,
-        language: document.getElementById("language").value,
-        source: document.getElementById("source").value
-    };
-    const resultEl = document.getElementById("result");
-    resultEl.textContent = "提交中，请稍候...";
+    const jsessionid = document.getElementById("jsessionid").value;
+    const username = document.getElementById("username").value;
+    const problem = document.getElementById("problem").value;
+    const language = document.getElementById("language").value;
+    const source = document.getElementById("source").value;
+    const resultDiv = document.getElementById("result");
+
+    resultDiv.innerText = "提交中...";
+
     try{
         const res = await fetch("/.netlify/functions/submit_code", {
             method:"POST",
-            headers: {"Content-Type":"application/json"},
-            body: JSON.stringify(data)
+            headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({jsessionid, username, problem, language, source})
         });
-        const json = await res.json();
-        resultEl.textContent = JSON.stringify(json,null,2);
-    }catch(e){
-        resultEl.textContent = e;
+        const data = await res.json();
+        if(data.error){
+            resultDiv.innerText = "错误: " + data.error;
+        } else {
+            resultDiv.innerText = `RunID: ${data.runid}\n判定: ${data.verdict}`;
+        }
+    } catch(e){
+        resultDiv.innerText = "网络或函数错误: " + e;
     }
 }
 </script>
