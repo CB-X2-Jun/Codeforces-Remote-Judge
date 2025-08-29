@@ -4,96 +4,85 @@
 <meta charset="UTF-8">
 <title>Codeforces 远程评测</title>
 <style>
-body { font-family: Arial; max-width: 800px; margin: 40px auto; padding: 0 20px; }
-label, input, select, textarea, button { display: block; margin-bottom: 10px; width: 100%; }
-textarea { height: 300px; font-family: monospace; }
-button { padding: 8px; background: #4CAF50; color: white; border: none; cursor: pointer; }
-button:hover { background: #45a049; }
-#result { margin-top: 20px; white-space: pre-wrap; font-family: monospace; }
+body{font-family:Arial, sans-serif; max-width:700px; margin:40px auto;}
+label, input, select, textarea, button { display:block; width:100%; margin-bottom:10px; }
+textarea{height:200px; font-family: monospace;}
+button{padding:8px; background:#4CAF50; color:white; border:none; cursor:pointer;}
+button:hover{background:#45a049;}
+.result{padding:10px;border-radius:5px;margin-top:10px;}
+.ac{background:#d4edda;color:#155724;}
+.wa,.tle,.mle,.re,.pe,.ole,.systemerror{background:#f8d7da;color:#721c24;}
+.ce{background:#fff3cd;color:#856404;}
 </style>
 </head>
 <body>
 <h2>Codeforces 远程评测</h2>
-
-<label>JSESSIONID: <input id="jsessionid" type="text" required></label>
-<label>用户名: <input id="username" type="text" required></label>
-<label>题号: <input id="problem_id" type="text" required></label>
+<form id="submitForm">
+<label>JSESSIONID: <input name="jsessionid" type="text" required></label>
+<label>用户名: <input name="username" type="text" required></label>
+<label>题号: <input name="problem" type="text" required></label>
 <label>语言:
-<select id="language">
-<option value="43">GNU GCC C11 5.1.0</option>
-                            <option value="54">GNU G++17 7.3.0</option>
-                            <option value="89">GNU G++20 13.2 (64 bit, winlibs)</option>
-                            <option value="91">GNU G++23 14.2 (64 bit, msys2)</option>
-                            <option value="65">C# 8, .NET Core 3.1</option>
-                            <option value="79">C# 10, .NET SDK 6.0</option>
-                            <option value="96">C# 13, .NET SDK 9</option>
-                            <option value="9">C# Mono 6.8</option>
-                            <option value="28">D DMD32 v2.105.0</option>
-                            <option value="97">F# 9, .NET SDK 9</option>
-                            <option value="32">Go 1.22.2</option>
-                            <option value="12">Haskell GHC 8.10.1</option>
-                            <option value="87">Java 21 64bit</option>
-                            <option value="36">Java 8 32bit</option>
-                            <option value="83">Kotlin 1.7.20</option>
-                            <option value="88">Kotlin 1.9.21</option>
-                            <option value="99">Kotlin 2.2.0</option>
-                            <option value="19">OCaml 4.02.1</option>
-                            <option value="3">Delphi 7</option>
-                            <option value="4">Free Pascal 3.2.2</option>
-                            <option value="51">PascalABC.NET 3.8.3</option>
-                            <option value="13">Perl 5.20.1</option>
-                            <option value="6">PHP 8.1.7</option>
-                            <option value="7">Python 2.7.18</option>
-                            <option value="31">Python 3.13.2</option>
-                            <option value="40">PyPy 2.7.13 (7.3.0)</option>
-                            <option value="41">PyPy 3.6.9 (7.3.0)</option>
-                            <option value="70">PyPy 3.10 (7.3.15, 64bit)</option>
-                            <option value="67">Ruby 3.2.2</option>
-                            <option value="75">Rust 1.89.0 (2021)</option>
-                            <option value="98">Rust 1.89.0 (2024)</option>
-                            <option value="20">Scala 2.12.8</option>
-                            <option value="34">JavaScript V8 4.8.0</option>
-                            <option value="55">Node.js 15.8.0 (64bit)</option>
-</select>
-</label>
-<label>源代码:<br><textarea id="source" required></textarea></label>
-<button onclick="submitCF()">提交</button>
+<select name="language">
+<option value="43">C11</option>
+<option value="54">G++17</option>
+<option value="89">G++20</option>
+<option value="91">G++23</option>
+<option value="70">PyPy 3.10</option>
+<option value="31">Python 3</option>
+<option value="87">Java 21</option>
+</select></label>
+<label>源代码:<br><textarea name="source" required></textarea></label>
+<button type="submit">提交</button>
+</form>
 
 <div id="result"></div>
 
 <script>
-async function submitCF() {
-    const data = {
-        jsessionid: document.getElementById('jsessionid').value,
-        username: document.getElementById('username').value,
-        problem_id: document.getElementById('problem_id').value,
-        language: document.getElementById('language').value,
-        source: document.getElementById('source').value
-    };
-    const resDiv = document.getElementById('result');
-    resDiv.textContent = '提交中...';
+const form = document.getElementById('submitForm');
+const resultDiv = document.getElementById('result');
+
+form.addEventListener('submit', async e => {
+    e.preventDefault();
+    resultDiv.innerHTML = '提交中，请稍候...';
+
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
 
     try {
-        const resp = await fetch('/.netlify/functions/submit_code', {
-            method: 'POST',
+        // 提交到后端 Function
+        const submitResp = await fetch('/.netlify/functions/submit_code', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
             body: JSON.stringify(data)
         });
-        const json = await resp.json();
-        if (json.error) {
-            resDiv.textContent = '错误: ' + json.error;
-        } else {
-            resDiv.innerHTML = `
-<strong>题号:</strong> ${json.problem}<br>
-<strong>RunID:</strong> ${json.runid}<br>
-<strong>判定:</strong> ${json.verdict}<br>
-<strong>时间:</strong> ${json.time}<br>
-<strong>内存:</strong> ${json.memory}
-            `;
+
+        const respJson = await submitResp.json();
+        if(respJson.error){
+            resultDiv.innerHTML = `<div class="result systemerror">错误: ${respJson.error}</div>`;
+            return;
         }
-    } catch(err) {
-        resDiv.textContent = '提交失败: ' + err;
+
+        const runid = respJson.runid;
+        resultDiv.innerHTML = `提交成功，RunID: ${runid}<br>等待判定...`;
+
+        // 轮询状态
+        const pollStatus = async () => {
+            const statusResp = await fetch(`/.netlify/functions/submit_code?username=${data.username}&problem=${data.problem}`);
+            const statusJson = await statusResp.json();
+            if(statusJson.verdict && statusJson.verdict.toLowerCase()!=='pending'){
+                const cls = statusJson.verdict.toLowerCase();
+                resultDiv.innerHTML = `<div class="result ${cls}">判定结果: ${statusJson.verdict}</div>
+                <pre>${statusJson.raw || ''}</pre>`;
+            } else {
+                setTimeout(pollStatus, 1500);
+            }
+        };
+        pollStatus();
+
+    } catch(err){
+        resultDiv.innerHTML = `<div class="result systemerror">网络错误: ${err}</div>`;
     }
-}
+});
 </script>
 </body>
 </html>
