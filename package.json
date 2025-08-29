@@ -1,0 +1,12 @@
+{
+  "name": "codeforces-netlify",
+  "version": "1.0.0",
+  "dependencies": {
+    "node-fetch": "^2.6.7",
+    "cheerio": "^1.0.0-rc.12"
+  },
+  "devDependencies": {
+    "@netlify/functions": "^3.2.0",
+    "typescript": "^5.2.2"
+  }
+}
