@@ -1,139 +1,44 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <title>Codeforces 远程评测（Netlify + Puppeteer）</title>
-  <style>
-    body{font-family:Arial,Helvetica,sans-serif;max-width:900px;margin:40px auto;padding:0 20px;}
-    label{display:block;margin:10px 0 6px;}
-    input,select,textarea,button{width:100%;padding:8px;box-sizing:border-box}
-    textarea{height:260px;font-family:monospace}
-    button{background:#2563eb;color:#fff;border:none;border-radius:8px;cursor:pointer}
-    button:hover{background:#1e40af}
-    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    .muted{color:#666;font-size:12px}
-    pre{background:#f6f8fa;padding:12px;border-radius:8px;white-space:pre-wrap}
-    .badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:12px;margin-left:6px}
-    .ac{background:#d1fae5;color:#065f46}
-    .wa,.re,.mle,.tle,.ole{background:#fee2e2;color:#7f1d1d}
-    .ce,.pe{background:#fef3c7;color:#78350f}
-  </style>
+  <meta charset="UTF-8">
+  <title>Codeforces 远端评测</title>
 </head>
 <body>
-  <h2>Codeforces 远程评测</h2>
-  <p class="muted">提示：请先在浏览器登录 Codeforces 并通过验证，然后从开发者工具复制 <strong>JSESSIONID</strong> 与 <strong>39ce7</strong> 两个 Cookie，粘贴到下面。只要 Cookie 有效，即可提交并抓取评测结果。</p>
-
+  <h1>Codeforces 远端评测</h1>
   <form id="submitForm">
-    <label>Cookie（形如：<code>JSESSIONID=...; 39ce7=...</code>）</label>
-    <input id="cookies" placeholder="JSESSIONID=...; 39ce7=..." required />
+    <label>题号: <input type="text" name="problem" placeholder="例如 1A" required></label><br>
 
-    <label>Handle（用户名）</label>
-    <input id="handle" placeholder="你的 Codeforces 用户名" required />
+    <label>Language:
+      <select name="langId">
+        <option value="54">GNU G++17</option>
+        <option value="89">GNU G++20</option>
+        <option value="31">Python 3.13.2</option>
+      </select>
+    </label><br>
 
-    <div class="row">
-      <div>
-        <label>题号（如：1A）</label>
-        <input id="problemCode" placeholder="例如：1A（会自动拆分为 Contest=1, Index=A）" />
-      </div>
-      <div>
-        <label>或手动填写：Contest ID / Problem Index</label>
-        <div class="row">
-          <input id="contestId" placeholder="Contest ID（例：1）" />
-          <input id="problemIndex" placeholder="Problem Index（例：A）" />
-        </div>
-      </div>
-    </div>
+    <label>代码: <br><textarea name="source" rows="10" cols="50" required></textarea></label><br>
 
-    <label>语言</label>
-    <select id="languageId" required>
-      <!-- 下面 value 是 programTypeId（你在 CF 提交页 select 的 value） -->
-      <option value="54">GNU G++17 7.3.0</option>
-      <option value="89">GNU G++20 13.2 (64 bit, winlibs)</option>
-      <option value="91">GNU G++23 14.2 (64 bit, msys2)</option>
-      <option value="43">GNU GCC C11 5.1.0</option>
-      <option value="31">Python 3.13.2</option>
-      <option value="70">PyPy 3.10 (7.3.15, 64bit)</option>
-      <option value="87">Java 21 64bit</option>
-      <option value="79">C# 10, .NET SDK 6.0</option>
-      <option value="98">Rust 1.89.0 (2024)</option>
-    </select>
+    <label>JSESSIONID: <input type="text" name="jsessionid" required></label><br>
+    <label>39ce7: <input type="text" name="c39ce7" required></label><br>
 
-    <label>源代码</label>
-    <textarea id="sourceCode" placeholder="// 在此粘贴你的代码" required></textarea>
-
-    <button type="submit">提交并等待评测</button>
+    <button type="submit">提交</button>
   </form>
 
-  <h3>提交结果</h3>
-  <pre id="result">尚未提交</pre>
+  <pre id="result"></pre>
 
   <script>
-    function parseProblemCode(code) {
-      if (!code) return null;
-      const m = code.trim().match(/^(\d+)\s*([A-Za-z]\d*)$/);
-      if (!m) return null;
-      return { contestId: m[1], problemIndex: m[2].toUpperCase() };
-    }
-
-    function verdictBadge(verdict) {
-      const v = (verdict || "").toUpperCase();
-      let cls = "badge";
-      if (v.includes("ACCEPTED")) cls += " ac";
-      else if (v.includes("COMPILATION ERROR") || v.includes("COMPILE")) cls += " ce";
-      else if (v.includes("WRONG") || v.includes("RUNTIME") || v.includes("MEMORY") || v.includes("TIME") || v.includes("OUTPUT")) cls += " wa";
-      else if (v.includes("PRESENTATION")) cls += " pe";
-      else cls += "";
-      return `<span class="${cls}">${verdict}</span>`;
-    }
-
     document.getElementById("submitForm").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const cookies = document.getElementById("cookies").value.trim();
-      const handle = document.getElementById("handle").value.trim();
-      const problemCode = document.getElementById("problemCode").value.trim();
-      let contestId = document.getElementById("contestId").value.trim();
-      let problemIndex = document.getElementById("problemIndex").value.trim();
-      const languageId = document.getElementById("languageId").value;
-      const sourceCode = document.getElementById("sourceCode").value;
+      const data = Object.fromEntries(new FormData(e.target));
 
-      if (problemCode && (!contestId || !problemIndex)) {
-        const parsed = parseProblemCode(problemCode);
-        if (parsed) {
-          contestId = parsed.contestId;
-          problemIndex = parsed.problemIndex;
-        }
-      }
-
-      if (!cookies || !handle || !contestId || !problemIndex || !languageId || !sourceCode) {
-        document.getElementById("result").textContent = "请完整填写所有字段（Cookie、Handle、Contest ID、Problem Index、语言、源代码）。";
-        return;
-      }
-
-      document.getElementById("result").textContent = "正在提交并等待评测...";
-
-      try {
-        const res = await fetch("/.netlify/functions/submit_code", {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({ cookies, handle, contestId, problemIndex, languageId, sourceCode })
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          document.getElementById("result").textContent = "提交失败：\n" + JSON.stringify(data, null, 2);
-          return;
-        }
-        const v = data.verdict ? verdictBadge(data.verdict) : "";
-        document.getElementById("result").innerHTML = 
-`提交完成：
-Submission ID: ${data.submissionId || "-"}
-Verdict: ${v}
-Time: ${data.time || "-"}
-Memory: ${data.memory || "-"}
-Link: ${data.link || "-"}
-Raw: ${JSON.stringify(data, null, 2)}`;
-      } catch (err) {
-        document.getElementById("result").textContent = "网络或函数错误：\n" + (err && err.message ? err.message : err);
-      }
+      const resp = await fetch("/.netlify/functions/submit_code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+      });
+      const json = await resp.json();
+      document.getElementById("result").textContent = JSON.stringify(json, null, 2);
     });
   </script>
 </body>
