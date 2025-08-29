@@ -1,7 +1,6 @@
-[build]
-  publish = "."          # 网站根目录
-  functions = "functions" # functions 目录
-
 [functions]
-  # Python3.9 运行时
-  python_version = "3.9"
+  # 指定函数目录
+  directory = "functions"
+
+[build]
+  publish = "public"
