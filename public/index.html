@@ -1,88 +1,57 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html>
 <head>
-<meta charset="UTF-8">
-<title>Codeforces 远程评测</title>
+<meta charset="utf-8">
+<title>Codeforces远端评测</title>
 <style>
-body{font-family:Arial, sans-serif; max-width:700px; margin:40px auto;}
-label, input, select, textarea, button { display:block; width:100%; margin-bottom:10px; }
-textarea{height:200px; font-family: monospace;}
-button{padding:8px; background:#4CAF50; color:white; border:none; cursor:pointer;}
+body{font-family: Arial; max-width:800px;margin:30px auto;}
+label,input,select,textarea,button{display:block;margin-bottom:10px;width:100%;}
+textarea{height:300px;font-family: monospace;}
+button{padding:8px;background:#4CAF50;color:white;border:none;cursor:pointer;}
 button:hover{background:#45a049;}
-.result{padding:10px;border-radius:5px;margin-top:10px;}
-.ac{background:#d4edda;color:#155724;}
-.wa,.tle,.mle,.re,.pe,.ole,.systemerror{background:#f8d7da;color:#721c24;}
-.ce{background:#fff3cd;color:#856404;}
+.result{padding:10px;border-radius:5px; margin:5px 0; font-weight:bold;}
 </style>
 </head>
 <body>
-<h2>Codeforces 远程评测</h2>
-<form id="submitForm">
-<label>JSESSIONID: <input name="jsessionid" type="text" required></label>
-<label>用户名: <input name="username" type="text" required></label>
-<label>题号: <input name="problem" type="text" required></label>
+<h2>Codeforces远端评测</h2>
+<label>JSESSIONID: <input id="jsessionid"></label>
+<label>用户名: <input id="username"></label>
+<label>题号: <input id="problem" placeholder="例如 1A"></label>
 <label>语言:
-<select name="language">
-<option value="43">C11</option>
-<option value="54">G++17</option>
-<option value="89">G++20</option>
-<option value="91">G++23</option>
-<option value="70">PyPy 3.10</option>
-<option value="31">Python 3</option>
-<option value="87">Java 21</option>
-</select></label>
-<label>源代码:<br><textarea name="source" required></textarea></label>
-<button type="submit">提交</button>
-</form>
+<select id="language">
+<option value="54">GNU G++17 7.3.0</option>
+<option value="43">GNU GCC C11 5.1.0</option>
+<option value="87">Java 21 64bit</option>
+</select>
+</label>
+<label>源代码:<br><textarea id="source"></textarea></label>
+<button onclick="submitCode()">提交</button>
 
-<div id="result"></div>
+<h3>提交结果:</h3>
+<pre id="result"></pre>
 
 <script>
-const form = document.getElementById('submitForm');
-const resultDiv = document.getElementById('result');
-
-form.addEventListener('submit', async e => {
-    e.preventDefault();
-    resultDiv.innerHTML = '提交中，请稍候...';
-
-    const formData = new FormData(form);
-    const data = Object.fromEntries(formData.entries());
-
-    try {
-        // 提交到后端 Function
-        const submitResp = await fetch('/.netlify/functions/submit_code', {
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
+async function submitCode(){
+    const data = {
+        jsessionid: document.getElementById("jsessionid").value,
+        problem: document.getElementById("problem").value,
+        language: document.getElementById("language").value,
+        source: document.getElementById("source").value
+    };
+    const resultEl = document.getElementById("result");
+    resultEl.textContent = "提交中，请稍候...";
+    try{
+        const res = await fetch("/.netlify/functions/submit_code", {
+            method:"POST",
+            headers: {"Content-Type":"application/json"},
             body: JSON.stringify(data)
         });
-
-        const respJson = await submitResp.json();
-        if(respJson.error){
-            resultDiv.innerHTML = `<div class="result systemerror">错误: ${respJson.error}</div>`;
-            return;
-        }
-
-        const runid = respJson.runid;
-        resultDiv.innerHTML = `提交成功，RunID: ${runid}<br>等待判定...`;
-
-        // 轮询状态
-        const pollStatus = async () => {
-            const statusResp = await fetch(`/.netlify/functions/submit_code?username=${data.username}&problem=${data.problem}`);
-            const statusJson = await statusResp.json();
-            if(statusJson.verdict && statusJson.verdict.toLowerCase()!=='pending'){
-                const cls = statusJson.verdict.toLowerCase();
-                resultDiv.innerHTML = `<div class="result ${cls}">判定结果: ${statusJson.verdict}</div>
-                <pre>${statusJson.raw || ''}</pre>`;
-            } else {
-                setTimeout(pollStatus, 1500);
-            }
-        };
-        pollStatus();
-
-    } catch(err){
-        resultDiv.innerHTML = `<div class="result systemerror">网络错误: ${err}</div>`;
+        const json = await res.json();
+        resultEl.textContent = JSON.stringify(json,null,2);
+    }catch(e){
+        resultEl.textContent = e;
     }
-});
+}
 </script>
 </body>
 </html>
