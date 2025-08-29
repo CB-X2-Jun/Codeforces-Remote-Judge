@@ -4,62 +4,62 @@
 <meta charset="utf-8">
 <title>Codeforces 远程评测</title>
 <style>
-body { font-family: Arial; max-width: 900px; margin: 40px auto; padding: 0 20px; }
-label, input, select, textarea, button { display: block; margin-bottom: 10px; width: 100%; }
-textarea { height: 300px; font-family: monospace; }
-button { padding: 8px; background: #4CAF50; color: white; border: none; cursor: pointer; }
-button:hover { background: #45a049; }
-.result { padding: 10px; border-radius: 5px; margin: 5px 0; font-weight: bold; }
-.ac { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-.wa { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-.ce { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
-.tle { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-.re { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+body{font-family: Arial; max-width:900px;margin:40px auto;padding:0 20px;}
+label,input,select,textarea,button{display:block;margin-bottom:10px;width:100%;}
+textarea{height:300px;font-family: monospace;}
+button{padding:8px; background:#4CAF50; color:white; border:none; cursor:pointer;}
+button:hover{background:#45a049;}
+#result{margin-top:20px;padding:10px;border:1px solid #ccc;}
 </style>
 </head>
 <body>
-
-<h2>Codeforces 远程评测</h2>
+<h2>Codeforces 远程评测 (Netlify)</h2>
 <form id="submitForm">
-  <label>JSESSIONID: <input name="jsessionid" type="text" required></label>
-  <label>用户名: <input name="username" type="text" required></label>
-  <label>题号: <input name="problem_id" type="text" required></label>
-  <label>语言:
-    <select name="language">
-      <option value="42">GNU C++17</option>
-      <option value="43">GNU C++20</option>
-      <option value="50">Python 3</option>
-    </select>
-  </label>
-  <label>源代码:<br>
-    <textarea name="source" required></textarea>
-  </label>
-  <button type="submit">提交</button>
+<label>JSESSIONID: <input name="jsessionid" type="text" required></label>
+<label>用户名: <input name="username" type="text" required></label>
+<label>题号 (如 1A): <input name="problem_id" type="text" required></label>
+<label>语言:
+<select name="language">
+<option value="54">GNU G++17 7.3.0</option>
+<option value="50">GNU C++14 6.4.0</option>
+<option value="51">GNU C++17 7.3.0</option>
+<option value="42">Python 3</option>
+</select></label>
+<label>源代码:<br><textarea name="source" required></textarea></label>
+<button type="submit">提交</button>
 </form>
 
-<div id="resultContainer"></div>
+<div id="result"></div>
 
 <script>
-document.getElementById('submitForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const form = e.target;
-    const data = new URLSearchParams(new FormData(form));
+document.getElementById('submitForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const data = {
+    jsessionid: form.jsessionid.value,
+    username: form.username.value,
+    problem_id: form.problem_id.value,
+    language: form.language.value,
+    source: form.source.value
+  };
+  const resDiv = document.getElementById('result');
+  resDiv.textContent = '正在提交，请稍候...';
 
-    document.getElementById('resultContainer').innerHTML = "正在提交，请稍候...";
-
-    try {
-        const resp = await fetch('/.netlify/functions/submit_code', {
-            method: 'POST',
-            body: data
-        });
-        const htmlText = await resp.text();
-        document.getElementById('resultContainer').innerHTML = htmlText;
-    } catch (err) {
-        document.getElementById('resultContainer').innerHTML = "<p style='color:red;'>提交失败，请检查网络或函数部署。</p>";
-        console.error(err);
-    }
-});
+  try {
+    const resp = await fetch('/.netlify/functions/submit_code', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+    const json = await resp.json();
+    resDiv.innerHTML = `<strong>题号:</strong> ${json.problem}<br>
+                        <strong>RunID:</strong> ${json.runid}<br>
+                        <strong>判定:</strong> ${json.verdict}<br>
+                        <strong>时间:</strong> ${json.time}<br>
+                        <strong>内存:</strong> ${json.memory}`;
+  } catch(err) {
+    resDiv.textContent = '提交失败: ' + err;
+  }
+};
 </script>
-
 </body>
 </html>
