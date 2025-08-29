@@ -1,45 +1,76 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <title>Codeforces 远端评测</title>
+<meta charset="UTF-8">
+<title>Codeforces 远端评测</title>
+<style>
+body { font-family: Arial, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; background: #f9f9f9; }
+h2 { text-align: center; }
+form { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+label { display: block; margin: 10px 0 5px; }
+input, select, textarea, button { width: 100%; padding: 8px; margin-bottom: 12px; border-radius: 4px; border: 1px solid #ccc; }
+textarea { font-family: monospace; height: 200px; }
+button { background: #4CAF50; color: white; border: none; cursor: pointer; }
+button:hover { background: #45a049; }
+.result { padding: 10px; border-radius: 5px; font-weight: bold; margin-top: 10px; }
+.ac { background:#d4edda; color:#155724; border:1px solid #c3e6cb; }
+.wa { background:#f8d7da; color:#721c24; border:1px solid #f5c6cb; }
+.ce { background:#fff3cd; color:#856404; border:1px solid #ffeeba; }
+.tle, .mle, .re, .ole, .pe { background:#f8d7da; color:#721c24; border:1px solid #f5c6cb; }
+.systemerror { background:#dfdfdf; color:#666666; border:1px solid #cfcfcf; }
+</style>
 </head>
 <body>
-  <h1>Codeforces 远端评测</h1>
-  <form id="submitForm">
-    <label>题号: <input type="text" name="problem" placeholder="例如 1A" required></label><br>
-
-    <label>Language:
-      <select name="langId">
-        <option value="54">GNU G++17</option>
-        <option value="89">GNU G++20</option>
-        <option value="31">Python 3.13.2</option>
-      </select>
-    </label><br>
-
-    <label>代码: <br><textarea name="source" rows="10" cols="50" required></textarea></label><br>
-
-    <label>JSESSIONID: <input type="text" name="jsessionid" required></label><br>
-    <label>39ce7: <input type="text" name="c39ce7" required></label><br>
-
+<h2>Codeforces 远端评测</h2>
+<form id="submitForm">
+    <label>JSESSIONID Cookie: <input type="text" name="JSESSIONID" required></label>
+    <label>39ce7 Cookie: <input type="text" name="cookie39ce7" required></label>
+    <label>用户名: <input type="text" name="username" required></label>
+    <label>题目号: <input type="text" name="problemId" placeholder="如 1A" required></label>
+    <label>语言:
+        <select name="programTypeId" required>
+            <option value="54">GNU G++17 7.3.0</option>
+            <option value="89">GNU G++20 13.2</option>
+            <option value="91">GNU G++23 14.2</option>
+            <option value="87">Java 21 64bit</option>
+            <option value="31">Python 3.13.2</option>
+        </select>
+    </label>
+    <label>源代码:<textarea name="source" required></textarea></label>
     <button type="submit">提交</button>
-  </form>
+</form>
 
-  <pre id="result"></pre>
+<div id="result"></div>
 
-  <script>
-    document.getElementById("submitForm").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const data = Object.fromEntries(new FormData(e.target));
+<script>
+const form = document.getElementById('submitForm');
+const resultDiv = document.getElementById('result');
 
-      const resp = await fetch("/.netlify/functions/submit_code", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data)
-      });
-      const json = await resp.json();
-      document.getElementById("result").textContent = JSON.stringify(json, null, 2);
-    });
-  </script>
+form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    resultDiv.innerHTML = '提交中...';
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
+
+    try {
+        const resp = await fetch('/.netlify/functions/submit_code', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const json = await resp.json();
+        if (json.error) {
+            resultDiv.innerHTML = `<div class="systemerror">错误: ${json.error}</div>`;
+        } else {
+            // 展示判定结果
+            const { verdict, time, memory } = json;
+            let className = verdict.toLowerCase();
+            resultDiv.innerHTML = `<div class="${className}">判定结果: ${verdict} &nbsp; 用时: ${time || '-'} &nbsp; 内存: ${memory || '-'}</div>`;
+        }
+    } catch(err) {
+        resultDiv.innerHTML = `<div class="systemerror">网络或函数错误: ${err}</div>`;
+    }
+});
+</script>
 </body>
 </html>
