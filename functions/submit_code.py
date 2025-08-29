@@ -1,72 +1,112 @@
-import requests, json, os
+import json
+import requests
 from bs4 import BeautifulSoup
-from urllib.parse import quote_plus
+import time
 
 def handler(event, context):
-    # 区分 GET(轮询) 和 POST(提交)
-    if event['httpMethod'] == 'POST':
-        try:
-            data = json.loads(event['body'])
-            jsessionid = data['jsessionid']
-            username = data['username']
-            problem = data['problem']
-            language = data['language']
-            source = data['source']
-        except Exception as e:
-            return {'statusCode':400, 'body':json.dumps({'error':f'参数解析失败: {e}'})}
+    try:
+        data = json.loads(event['body'])
+        jsessionid = data.get('jsessionid')
+        problem = data.get('problem')
+        language = data.get('language')
+        source = data.get('source')
+
+        if not all([jsessionid, problem, language, source]):
+            return {
+                "statusCode": 400,
+                "headers": {"Content-Type":"application/json"},
+                "body": json.dumps({"error":"缺少参数"})
+            }
 
         session = requests.Session()
         session.cookies.set('JSESSIONID', jsessionid, domain='.codeforces.com')
-        headers = {'User-Agent':'Mozilla/5.0'}
 
-        try:
-            # 1. 获取提交页面
-            s = session.get('https://codeforces.com/problemset/submit', headers=headers)
-            s.raise_for_status()
-            soup = BeautifulSoup(s.text, 'html.parser')
+        submit_url = "https://codeforces.com/problemset/submit"
+        payload = {
+            "submittedProblemIndex": problem,
+            "programTypeId": language,
+            "source": source
+        }
 
-            # 2. 获取 csrf_token
-            token_input = soup.find('input', {'name':'csrf_token'})
-            if not token_input:
-                return {'statusCode':500, 'body':json.dumps({'error':'无法获取 csrf_token'})}
-            csrf_token = token_input['value']
+        headers = {
+            "User-Agent":"Mozilla/5.0",
+            "Referer": submit_url
+        }
 
-            # 3. POST 提交
-            submit_url = 'https://codeforces.com/problemset/submit?csrf_token=' + quote_plus(csrf_token)
-            payload = {
-                'csrf_token': csrf_token,
-                'action':'submitSolutionFormSubmitted',
-                'submittedProblemIndex': problem.upper(),
-                'programTypeId': language,
-                'source': source,
+        r = session.post(submit_url, data=payload, headers=headers)
+        if r.status_code != 200:
+            return {
+                "statusCode": 500,
+                "headers": {"Content-Type":"application/json"},
+                "body": json.dumps({"error":"提交失败"})
             }
-            r = session.post(submit_url, data=payload, headers=headers)
-            r.raise_for_status()
 
-            # 4. 获取最新 RunID
-            status_url = f'https://codeforces.com/submissions/{username}'
-            s2 = session.get(status_url, headers=headers)
-            s2.raise_for_status()
-            soup2 = BeautifulSoup(s2.text, 'html.parser')
-            tr = soup2.find('tr', class_='accepted') or soup2.find('tr')
-            runid = tr.find('td').get_text(strip=True) if tr else '未知'
-            return {'statusCode':200, 'body':json.dumps({'runid':runid})}
+        # 获取提交ID（runID）
+        # Codeforces 状态页
+        status_url = f"https://codeforces.com/submissions"
+        runid = None
+        for _ in range(10):
+            sr = session.get(status_url, headers=headers)
+            if sr.status_code != 200:
+                continue
+            sr.encoding = 'utf-8'
+            soup = BeautifulSoup(sr.text, 'html.parser')
+            rows = soup.select('table.status-frame-datatable tr')
+            for row in rows[1:]:
+                cols = row.find_all('td')
+                if len(cols) < 7:
+                    continue
+                p_index = cols[3].get_text(strip=True)
+                if p_index == problem:
+                    runid = cols[0].get_text(strip=True)
+                    verdict = cols[5].get_text(strip=True)
+                    break
+            if runid:
+                break
+            time.sleep(1)
 
-        except Exception as e:
-            return {'statusCode':500, 'body':json.dumps({'error':str(e)})}
+        if not runid:
+            return {
+                "statusCode": 500,
+                "headers": {"Content-Type":"application/json"},
+                "body": json.dumps({"error":"未找到RunID"})
+            }
 
-    else:  # GET 轮询状态
-        try:
-            qs = event.get('queryStringParameters') or {}
-            username = qs.get('username')
-            problem = qs.get('problem')
-            if not username or not problem:
-                return {'statusCode':400,'body':json.dumps({'error':'缺少参数'})}
+        # 轮询获取判定状态
+        final_verdict = None
+        for _ in range(30):
+            sr = session.get(status_url, headers=headers)
+            sr.encoding = 'utf-8'
+            soup = BeautifulSoup(sr.text, 'html.parser')
+            rows = soup.select('table.status-frame-datatable tr')
+            for row in rows[1:]:
+                cols = row.find_all('td')
+                if len(cols) < 7:
+                    continue
+                rid = cols[0].get_text(strip=True)
+                if rid == runid:
+                    final_verdict = cols[5].get_text(strip=True)
+                    time_used = cols[3].get_text(strip=True)
+                    memory_used = cols[4].get_text(strip=True)
+                    break
+            if final_verdict and final_verdict not in ['Running', 'In queue']:
+                break
+            time.sleep(1)
 
-            session = requests.Session()
-            # TODO: 使用共享 JSESSIONID 或让前端每次都 POST 提交再轮询
-            # 简化演示，只返回 pending
-            return {'statusCode':200,'body':json.dumps({'verdict':'Pending'})}
+        return {
+            "statusCode": 200,
+            "headers": {"Content-Type":"application/json"},
+            "body": json.dumps({
+                "runid": runid,
+                "verdict": final_verdict,
+                "time": time_used if 'time_used' in locals() else '',
+                "memory": memory_used if 'memory_used' in locals() else ''
+            })
+        }
 
-        except Exception as e:
-            return {'statusCode':500, 'body':json.dumps({'error':str(e)})}
+    except Exception as e:
+        return {
+            "statusCode": 500,
+            "headers": {"Content-Type":"application/json"},
+            "body": json.dumps({"error": str(e)})
+        }
