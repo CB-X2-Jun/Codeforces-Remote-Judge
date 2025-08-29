@@ -1,7 +1,8 @@
 [build]
   publish = "public"
-  functions = "netlify/functions"
+  functions = "functions"
 
+# 可选：提供 /api 前缀
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
