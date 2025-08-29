@@ -1,78 +1,61 @@
 import json
 import requests
-import time
 from bs4 import BeautifulSoup
+
+CF_BASE = "https://codeforces.com"
 
 def handler(event, context):
     try:
-        data = json.loads(event.get("body") or "{}")
-        jsessionid = data.get("jsessionid")
-        username = data.get("username")
-        problem = data.get("problem")
-        language = data.get("language")
-        source = data.get("source")
-
-        if not all([jsessionid, username, problem, language, source]):
-            return {
-                "statusCode": 400,
-                "headers":{"Content-Type":"application/json"},
-                "body": json.dumps({"error":"缺少参数"})
-            }
+        body = json.loads(event['body'])
+        jsessionid = body.get("jsessionid")
+        username = body.get("username")
+        problem_id = body.get("problem_id")
+        language_id = body.get("language_id")
+        source_code = body.get("source_code")
+        if not all([jsessionid, username, problem_id, language_id, source_code]):
+            return {"statusCode":200,"body":json.dumps({"error":"参数不完整"})}
 
         session = requests.Session()
-        session.cookies.set("JSESSIONID", jsessionid, domain="codeforces.com")
+        session.cookies.set("JSESSIONID", jsessionid, domain=".codeforces.com")
+        # 提交
+        submit_url = f"{CF_BASE}/problemset/submit"
+        resp = session.get(submit_url)
+        if "login" in resp.url:
+            return {"statusCode":200,"body":json.dumps({"error":"JSESSIONID无效或未登录"})}
 
-        # Step 1: 获取提交页面，带 CSRF token
-        submit_page = session.get("https://codeforces.com/problemset/submit")
-        soup = BeautifulSoup(submit_page.text, "html.parser")
-        csrf = soup.find("input", {"name":"csrf_token"})["value"]
-
-        # Step 2: 提交代码
-        submit_data = {
-            "csrf_token": csrf,
+        problem_parts = problem_id.strip().upper()
+        contest_id = ''.join(filter(str.isdigit, problem_parts))
+        index = ''.join(filter(str.isalpha, problem_parts))
+        data = {
             "action": "submitSolutionFormSubmitted",
-            "submittedProblemIndex": problem.split("/")[1], # e.g., 1/A -> A
-            "programTypeId": language,
-            "source": source,
+            "submittedProblemCode": f"{contest_id}{index}",
+            "programTypeId": language_id,
+            "source": source_code,
+            "csrf_token": BeautifulSoup(resp.text,"html.parser").find("input",{"name":"csrf_token"})["value"]
         }
-        session.post("https://codeforces.com/problemset/submit", data=submit_data)
+        post_resp = session.post(submit_url, data=data)
+        if post_resp.status_code != 200:
+            return {"statusCode":200,"body":json.dumps({"error":"提交失败"})}
 
-        # Step 3: 轮询状态
-        status_url = f"https://codeforces.com/submissions/{username}"
-        verdict = ""
-        runid = ""
-        interval = 1.0
-        max_wait = 30.0
-        waited = 0.0
+        # 获取最新提交
+        status_url = f"{CF_BASE}/submissions/{username}"
+        sresp = session.get(status_url)
+        soup = BeautifulSoup(sresp.text,"html.parser")
+        table = soup.find("table", class_="status-frame-datatable")
+        first_row = table.find_all("tr")[1]
+        cells = first_row.find_all("td")
+        run_id = cells[0].text.strip()
+        verdict = cells[5].text.strip()
+        time = cells[6].text.strip()
+        memory = cells[7].text.strip()
 
-        while waited < max_wait:
-            r = session.get(status_url)
-            s = BeautifulSoup(r.text, "html.parser")
-            table = s.find("table", {"class":"status-frame-datatable"})
-            if table:
-                first_row = table.find("tr")
-                if first_row:
-                    cells = first_row.find_all("td")
-                    runid = cells[0].text.strip()
-                    verdict = cells[5].text.strip()
-                    if verdict not in ["In queue", "Running"]:
-                        break
-            time.sleep(interval)
-            waited += interval
-            interval = min(interval*1.5, 5.0)
-
-        return {
-            "statusCode": 200,
-            "headers":{"Content-Type":"application/json"},
-            "body": json.dumps({
-                "runid": runid,
-                "verdict": verdict
-            })
+        result = {
+            "run_id": run_id,
+            "verdict": verdict,
+            "time": time,
+            "memory": memory
         }
+        return {"statusCode":200, "body": json.dumps(result)}
 
     except Exception as e:
-        return {
-            "statusCode": 500,
-            "headers":{"Content-Type":"application/json"},
-            "body": json.dumps({"error": str(e)})
-        }
+        return {"statusCode":200,"body": json.dumps({"error": str(e)})}
