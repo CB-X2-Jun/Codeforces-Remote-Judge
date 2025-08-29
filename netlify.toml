@@ -1,9 +1,6 @@
 [build]
   publish = "public"
-  functions = "functions"
+  functions = "netlify/functions"
 
-# 可选：提供 /api 前缀
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
-  status = 200
+[functions]
+  node_bundler = "esbuild"
