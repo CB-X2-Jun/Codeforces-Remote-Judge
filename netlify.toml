@@ -1,6 +1,6 @@
-[functions]
-  # 指定函数目录
-  directory = "functions"
-
 [build]
   publish = "public"
+  functions = "functions"
+
+[functions]
+  directory = "functions"
