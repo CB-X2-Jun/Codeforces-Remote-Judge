@@ -1,2 +1,7 @@
 [build]
-  functions = "functions"
+  publish = "."          # 网站根目录
+  functions = "functions" # functions 目录
+
+[functions]
+  # Python3.9 运行时
+  python_version = "3.9"
