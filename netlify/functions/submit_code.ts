@@ -1,41 +1,86 @@
-import fetch from "node-fetch";
+import type { Handler } from '@netlify/functions';
+import fetch from 'node-fetch';
+import * as cheerio from 'cheerio';
 
-export default async (req: any, res: any) => {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+export const handler: Handler = async (event, context) => {
+    try {
+        if (event.httpMethod !== 'POST') {
+            return { statusCode: 405, body: JSON.stringify({ error: '只允许 POST' }) };
+        }
 
-  try {
-    const { problem, source, langId, jsessionid, c39ce7 } = req.body;
+        const body = JSON.parse(event.body || '{}');
+        const { JSESSIONID, cookie39ce7, username, problemId, programTypeId, source } = body;
 
-    // 拼接 cookie
-    const cookie = `JSESSIONID=${jsessionid}; 39ce7=${c39ce7}`;
+        if (!JSESSIONID || !cookie39ce7 || !username || !problemId || !programTypeId || !source) {
+            return { statusCode: 400, body: JSON.stringify({ error: '缺少必要字段' }) };
+        }
 
-    // 提交代码
-    const submitResp = await fetch("https://codeforces.com/problemset/submit", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Cookie": cookie
-      },
-      body: new URLSearchParams({
-        csrf_token: c39ce7,  // 有时要伪造 token，这里简化
-        action: "submitSolutionFormSubmitted",
-        submittedProblemCode: problem,
-        source,
-        programTypeId: langId,
-        tabSize: "4",
-        sourceFile: ""
-      })
-    });
+        // 1. 提交代码
+        const submitResp = await fetch('https://codeforces.com/problemset/submit', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Cookie': `JSESSIONID=${JSESSIONID}; 39ce7=${cookie39ce7}`,
+                'User-Agent': 'Mozilla/5.0'
+            },
+            body: new URLSearchParams({
+                'action': 'submitSolutionFormSubmitted',
+                'submittedProblemCode': problemId,
+                'programTypeId': programTypeId,
+                'source': source,
+                'csrf_token': cookie39ce7
+            })
+        });
 
-    if (submitResp.status !== 200) {
-      return res.status(500).json({ error: "提交失败，状态码: " + submitResp.status });
+        if (!submitResp.ok) {
+            return { statusCode: 500, body: JSON.stringify({ error: `提交失败，状态码 ${submitResp.status}` }) };
+        }
+
+        // 2. 轮询状态页
+        const statusUrl = `https://codeforces.com/submissions/${username}`;
+        let verdict = 'Pending';
+        let time = '';
+        let memory = '';
+        const maxWait = 60; // 秒
+        let waited = 0;
+
+        while (waited < maxWait) {
+            const statusResp = await fetch(statusUrl, {
+                headers: {
+                    'Cookie': `JSESSIONID=${JSESSIONID}; 39ce7=${cookie39ce7}`,
+                    'User-Agent': 'Mozilla/5.0'
+                }
+            });
+
+            const html = await statusResp.text();
+            const $ = cheerio.load(html);
+
+            // 找到第一条对应题目的提交记录
+            let found = false;
+            $('table.status-frame-datatable tr').each((i, el) => {
+                if (i === 0) return; // 表头
+                const cols = $(el).find('td');
+                const colProblem = $(cols[3]).text().trim();
+                const colVerdict = $(cols[5]).text().trim();
+                const colTime = $(cols[7]).text().trim();
+                const colMemory = $(cols[6]).text().trim();
+
+                if (colProblem === problemId) {
+                    verdict = colVerdict;
+                    time = colTime;
+                    memory = colMemory;
+                    found = true;
+                    return false; // break
+                }
+            });
+
+            if (verdict !== 'Pending') break;
+            await new Promise(r => setTimeout(r, 2000));
+            waited += 2;
+        }
+
+        return { statusCode: 200, body: JSON.stringify({ verdict, time, memory }) };
+    } catch (err: any) {
+        return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
     }
-
-    return res.json({ message: "提交成功！请在 Codeforces 查看结果" });
-
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
-  }
 };
