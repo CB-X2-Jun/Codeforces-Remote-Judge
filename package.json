@@ -1,12 +1,12 @@
 {
-  "name": "cfcfcf-netlify",
+  "name": "codeforces-netlify",
   "version": "1.0.0",
-  "scripts": {
-    "build": "echo 'No build step needed'"
-  },
   "dependencies": {
-    "node-fetch": "^3.3.2",
+    "node-fetch": "^2.6.7",
     "cheerio": "^1.0.0-rc.12"
   },
-  "type": "module"
+  "devDependencies": {
+    "@netlify/functions": "^3.2.0",
+    "typescript": "^5.2.2"
+  }
 }
