@@ -1,60 +1,59 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh">
 <head>
 <meta charset="UTF-8">
-<title>Codeforces远程评测</title>
+<title>Codeforces 远端评测</title>
 <style>
-body { font-family: Arial; max-width: 700px; margin: 40px auto; padding: 0 20px; }
-label, input, select, textarea, button { display:block; margin-bottom:10px; width:100%; }
-textarea { height:200px; font-family: monospace; }
-button { padding:8px; background:#4CAF50; color:white; border:none; cursor:pointer; }
-button:hover { background:#45a049; }
-.result { padding:10px; border-radius:5px; margin:5px 0; font-weight:bold; }
+body { font-family: Arial; max-width: 900px; margin: 40px auto; padding: 0 20px; }
+label,input,select,textarea,button{display:block;margin-bottom:10px;width:100%;}
+textarea{height:300px;font-family: monospace;}
+button{padding:8px;background:#4CAF50;color:white;border:none;cursor:pointer;}
+button:hover{background:#45a049;}
+.result{padding:10px;border-radius:5px;margin:5px 0;font-weight:bold;}
+.ac{background:#d4edda;color:#155724;border:1px solid #c3e6cb;}
+.wa{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;}
+.ce{background:#fff3cd;color:#856404;border:1px solid #ffeeba;}
 </style>
 </head>
 <body>
-<h2>Codeforces远程评测</h2>
+<h2>Codeforces 远端评测</h2>
 <form id="submitForm">
 <label>JSESSIONID: <input name="jsessionid" type="text" required></label>
 <label>用户名: <input name="username" type="text" required></label>
-<label>题目ID: <input name="problem_id" type="text" required placeholder="例如 1A"></label>
+<label>题号: <input name="problem_id" type="text" placeholder="例如 1A" required></label>
 <label>语言:
-<select name="language_id">
-<option value="54">G++17</option>
+<select name="language">
 <option value="43">C11</option>
+<option value="54">C++17</option>
+<option value="89">C++20</option>
 <option value="87">Java 21</option>
 <option value="31">Python 3</option>
-</select></label>
-<label>源代码:<br><textarea name="source_code" required></textarea></label>
+</select>
+</label>
+<label>源代码:<br><textarea name="source" required></textarea></label>
 <button type="submit">提交</button>
 </form>
 
-<h3>提交结果</h3>
-<pre id="result"></pre>
+<div id="result"></div>
 
 <script>
-document.getElementById("submitForm").addEventListener("submit", async function(e){
+const form = document.getElementById('submitForm');
+form.addEventListener('submit', async e => {
     e.preventDefault();
-    const formData = new FormData(e.target);
-    const obj = Object.fromEntries(formData.entries());
-
-    const resultEl = document.getElementById("result");
-    resultEl.textContent = "提交中，请稍候...";
-
+    const formData = new FormData(form);
+    const payload = Object.fromEntries(formData.entries());
+    const resDiv = document.getElementById('result');
+    resDiv.textContent = '正在提交...';
     try {
-        const resp = await fetch("/.netlify/functions/submit_code", {
-            method: "POST",
-            body: JSON.stringify(obj),
-            headers: { "Content-Type": "application/json" }
+        const resp = await fetch('/.netlify/functions/submit_code', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
         });
         const data = await resp.json();
-        if(data.error){
-            resultEl.textContent = "错误: " + data.error;
-        } else {
-            resultEl.textContent = JSON.stringify(data, null, 2);
-        }
-    } catch(err){
-        resultEl.textContent = "网络或函数错误: " + err;
+        resDiv.textContent = JSON.stringify(data, null, 2);
+    } catch(err) {
+        resDiv.textContent = '提交失败: ' + err;
     }
 });
 </script>
